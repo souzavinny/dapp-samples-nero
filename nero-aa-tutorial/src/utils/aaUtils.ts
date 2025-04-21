@@ -1027,4 +1027,114 @@ export const getNFTs = async (ownerAddress: string) => {
     console.error("Error fetching and processing NFTs:", error);
     return [];
   }
+};
+
+// Transfer ERC20 tokens through Account Abstraction (gasless transfers)
+export const transferERC20Token = async (
+  accountSigner: ethers.Signer, 
+  recipientAddress: string,
+  amount: ethers.BigNumber,
+  paymentType: number = 0, // 0: free (gasless), 1: prepay, 2: postpay
+  selectedToken: string = '', // Token address for ERC20 payment
+  options?: {
+    apiKey?: string;
+    gasMultiplier?: number;
+  }
+) => {
+  // Generate a unique operation key
+  const opKey = generateOperationKey('transferERC20', [
+    await accountSigner.getAddress(),
+    recipientAddress,
+    amount.toString(),
+    paymentType,
+    selectedToken,
+    options?.gasMultiplier || 100
+  ]);
+  
+  // Use memoized operation execution
+  return executeOperation(
+    opKey,
+    accountSigner,
+    async (client, builder) => {
+      try {
+        // Create ERC20 contract instance
+        const erc20Contract = new ethers.Contract(
+          CONTRACT_ADDRESSES.testTokenContract,
+          [
+            // Simple ERC20 functions we need
+            'function transfer(address, uint256) returns (bool)',
+            'function balanceOf(address) view returns (uint256)',
+            'function decimals() view returns (uint8)'
+          ],
+          getProvider()
+        );
+        
+        // Prepare the transfer function call data
+        const callData = erc20Contract.interface.encodeFunctionData('transfer', [
+          recipientAddress,
+          amount
+        ]);
+        
+        // Set transaction data in the builder
+        const userOp = await builder.execute(CONTRACT_ADDRESSES.testTokenContract, 0, callData);
+        
+        // Send the user operation
+        if (API_OPTIMIZATION.debugLogs) console.log(`Sending transfer ERC20 operation to paymaster`);
+        const res = await client.sendUserOperation(userOp);
+        
+        console.log("UserOperation sent with hash:", res.userOpHash);
+        
+        // Wait for the UserOperation to be included in a transaction
+        const receipt = await res.wait();
+        
+        let transactionHash = '';
+        try {
+          // Directly get the transaction hash from the receipt if available
+          if (receipt && receipt.transactionHash) {
+            transactionHash = receipt.transactionHash;
+          } 
+          // Otherwise try to get it using SimpleAccount (if available)
+          else if (Presets && Presets.SimpleAccount) {
+            // Get the account address
+            const accountAddress = await getAAWalletAddress(accountSigner);
+            const simpleAccountInstance = await Presets.SimpleAccount.init(
+              accountSigner,
+              NERO_CHAIN_CONFIG.rpcUrl,
+              {
+                overrideBundlerRpc: AA_PLATFORM_CONFIG.bundlerRpc,
+                entryPoint: CONTRACT_ADDRESSES.entryPoint,
+                factory: CONTRACT_ADDRESSES.accountFactory,
+              }
+            );
+            
+            // Get transaction details from the UserOp hash
+            const userOpResult = await simpleAccountInstance.checkUserOp(res.userOpHash);
+            transactionHash = userOpResult.receipt?.transactionHash || '';
+            
+            return {
+              userOpHash: res.userOpHash,
+              transactionHash,
+              receipt: userOpResult
+            };
+          }
+        } catch (error) {
+          console.warn("Error getting transaction details:", error);
+          // Continue with UserOp hash only
+        }
+        
+        // Fall back to just returning the UserOp hash if we couldn't get the transaction hash
+        return {
+          userOpHash: res.userOpHash,
+          transactionHash,
+          receipt: null
+        };
+      } catch (error) {
+        console.error("Error in transferERC20 operation:", error);
+        throw error;
+      }
+    },
+    paymentType,
+    selectedToken,
+    options
+  );
 }; 
