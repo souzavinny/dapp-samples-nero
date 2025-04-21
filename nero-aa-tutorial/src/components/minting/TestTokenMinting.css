@@ -6,6 +6,45 @@
   margin-bottom: 2rem;
 }
 
+/* Tab Navigation Styles */
+.token-tabs {
+  display: flex;
+  background-color: #f5f7ff;
+  border-radius: 8px;
+  padding: 4px;
+  margin: 1.5rem 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.token-tab-button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #5c6284;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+  border-radius: 6px;
+  position: relative;
+  z-index: 2;
+}
+
+.token-tab-button.active {
+  color: #3a3f69;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.token-tab-button:hover:not(.active) {
+  background-color: rgba(255, 255, 255, 0.5);
+  color: #3a3f69;
+}
+
 .token-balance-card {
   background-color: var(--nero-gray-100);
   border-radius: 6px;
