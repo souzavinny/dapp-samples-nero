@@ -11,6 +11,7 @@ interface MintButtonProps {
   gasMultiplier: number;
   onMintSuccess: (txHash: string) => void;
   onMintError: (error: Error) => void;
+  disabled?: boolean;
 }
 
 /**
@@ -22,7 +23,8 @@ const MintButton: React.FC<MintButtonProps> = ({
   paymentType,
   gasMultiplier,
   onMintSuccess,
-  onMintError
+  onMintError,
+  disabled = false
 }) => {
   const { walletState } = useWallet();
   const [isMinting, setIsMinting] = useState<boolean>(false);
@@ -90,7 +92,7 @@ const MintButton: React.FC<MintButtonProps> = ({
     <div className="mint-button-container">
       <button
         onClick={handleMint}
-        disabled={isMinting || !canMint()}
+        disabled={isMinting || !canMint() || disabled}
         className={`btn btn-primary mint-btn ${isMinting ? 'minting' : ''}`}
       >
         {isMinting ? 'Minting...' : 'Mint NFT'}

@@ -1137,4 +1137,124 @@ export const transferERC20Token = async (
     selectedToken,
     options
   );
+};
+
+// Check token allowance from AA wallet to the paymaster
+export const checkAAWalletTokenAllowance = async (
+  accountSigner: ethers.Signer,
+  tokenAddress: string,
+  spenderAddress: string = CONTRACT_ADDRESSES.paymaster
+) => {
+  try {
+    // Get AA wallet address
+    const aaWalletAddress = await getAAWalletAddress(accountSigner);
+    
+    // Create token contract instance
+    const tokenContract = new ethers.Contract(
+      tokenAddress,
+      [
+        'function allowance(address owner, address spender) view returns (uint256)',
+        'function decimals() view returns (uint8)'
+      ],
+      getProvider()
+    );
+    
+    // Get current allowance
+    const allowance = await tokenContract.allowance(aaWalletAddress, spenderAddress);
+    
+    // Get token decimals
+    let decimals = 18;
+    try {
+      decimals = await tokenContract.decimals();
+    } catch (err) {
+      console.warn(`Could not get decimals for token ${tokenAddress}, using default 18`);
+    }
+    
+    return ethers.utils.formatUnits(allowance, decimals);
+  } catch (error) {
+    console.error("Error checking AA wallet token allowance:", error);
+    return '0';
+  }
+};
+
+// Approve token spending from AA wallet to the paymaster using UserOperation
+export const approveAAWalletToken = async (
+  accountSigner: ethers.Signer,
+  tokenAddress: string,
+  amount: ethers.BigNumber,
+  spenderAddress: string = CONTRACT_ADDRESSES.paymaster,
+  options?: {
+    apiKey?: string;
+    gasMultiplier?: number;
+  }
+) => {
+  // Generate a unique operation key
+  const opKey = generateOperationKey('approveAAWalletToken', [
+    await accountSigner.getAddress(),
+    tokenAddress,
+    amount.toString(),
+    spenderAddress
+  ]);
+  
+  // Use memoized operation execution to reduce redundant API calls
+  return executeOperation(
+    opKey,
+    accountSigner,
+    async (client, builder) => {
+      try {
+        // Create token contract instance
+        const tokenContract = new ethers.Contract(
+          tokenAddress,
+          [
+            'function approve(address spender, uint256 amount) returns (bool)'
+          ],
+          getProvider()
+        );
+        
+        // Prepare the approve function call data
+        const callData = tokenContract.interface.encodeFunctionData('approve', [
+          spenderAddress,
+          amount
+        ]);
+        
+        // Override payment type to use free (sponsored) for this approval operation
+        // to avoid circular dependency (approving tokens to be able to pay for the approval transaction)
+        builder.setPaymasterOptions({
+          apikey: API_KEY,
+          rpc: AA_PLATFORM_CONFIG.paymasterRpc,
+          type: 0 // Free (sponsored)
+        });
+        
+        // Set transaction data in the builder
+        const userOp = await builder.execute(tokenAddress, 0, callData);
+        
+        // Send the user operation
+        console.log(`Sending AA wallet token approval operation`);
+        const res = await client.sendUserOperation(userOp);
+        
+        console.log("UserOperation sent with hash:", res.userOpHash);
+        
+        // Wait for the UserOperation to be included in a transaction
+        const receipt = await res.wait();
+        
+        let transactionHash = '';
+        if (receipt && receipt.transactionHash) {
+          transactionHash = receipt.transactionHash;
+        }
+        
+        return {
+          success: true,
+          userOpHash: res.userOpHash,
+          transactionHash,
+          receipt
+        };
+      } catch (error) {
+        console.error("Error in AA wallet token approval:", error);
+        throw error;
+      }
+    },
+    0, // Always use free (sponsored) for token approvals
+    '',
+    options
+  );
 }; 

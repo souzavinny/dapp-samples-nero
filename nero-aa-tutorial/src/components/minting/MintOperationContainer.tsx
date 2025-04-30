@@ -7,7 +7,6 @@ import PaymentTypeSelector from './PaymentTypeSelector';
 import RecipientInput from './RecipientInput';
 import TokenSelector from './TokenSelector';
 import TokenApproval from './TokenApproval';
-import TokenTransfer from './TokenTransfer';
 import MintButton from './MintButton';
 import NFTGallery from './NFTGallery';
 import AdvancedSettings from './AdvancedSettings';
@@ -31,9 +30,7 @@ const MintOperationContainer: React.FC = () => {
   
   // Transaction state
   const [requiredAllowance, setRequiredAllowance] = useState<string>('0');
-  const [tokenTransferAmount, setTokenTransferAmount] = useState<string>('0');
   const [approvalComplete, setApprovalComplete] = useState<boolean>(false);
-  const [transferComplete, setTransferComplete] = useState<boolean>(false);
   const [latestTxHash, setLatestTxHash] = useState<string>('');
   
   // Fetch gas price when connected and token-based gas prices when tokens are loaded
@@ -57,18 +54,6 @@ const MintOperationContainer: React.FC = () => {
     }
   }, [supportedTokens, fetchTokenGasPrices, paymentType]);
   
-  // Format the last updated time
-  const formatLastUpdated = (date: Date) => {
-    const now = new Date();
-    const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffSeconds < 60) {
-      return `${diffSeconds} seconds ago`;
-    }
-    
-    return date.toLocaleTimeString();
-  };
-  
   // Handle recipient address change
   const handleRecipientChange = (address: string) => {
     setRecipientAddress(address);
@@ -78,7 +63,6 @@ const MintOperationContainer: React.FC = () => {
   const handleTokenSelect = (tokenAddress: string) => {
     setSelectedToken(tokenAddress);
     setApprovalComplete(false);
-    setTransferComplete(false);
   };
   
   // Handle payment type selection
@@ -98,13 +82,6 @@ const MintOperationContainer: React.FC = () => {
   // Handle approval completion
   const handleApprovalComplete = () => {
     setApprovalComplete(true);
-    // After approval, we might need to transfer tokens to AA wallet
-    setTokenTransferAmount('0.01'); // Example amount, this could be calculated based on gas estimates
-  };
-  
-  // Handle transfer completion
-  const handleTransferComplete = () => {
-    setTransferComplete(true);
   };
   
   // Handle successful mint
@@ -119,6 +96,18 @@ const MintOperationContainer: React.FC = () => {
     console.error('Mint operation failed:', error);
     // Show error message
     toast.error(`Mint operation failed: ${error.message}`);
+  };
+  
+  // Format the last updated time
+  const formatLastUpdated = (date: Date) => {
+    const now = new Date();
+    const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffSeconds < 60) {
+      return `${diffSeconds} seconds ago`;
+    }
+    
+    return date.toLocaleTimeString();
   };
   
   return (
@@ -219,17 +208,9 @@ const MintOperationContainer: React.FC = () => {
                   {selectedToken && (
                     <TokenApproval 
                       selectedToken={selectedToken}
-                      tokenAmount={tokenTransferAmount}
+                      tokenAmount={'0.01'} // Just a placeholder amount
                       requiredAllowance={requiredAllowance}
                       onApprovalComplete={handleApprovalComplete}
-                    />
-                  )}
-                  
-                  {selectedToken && approvalComplete && (
-                    <TokenTransfer 
-                      selectedToken={selectedToken}
-                      transferAmount={tokenTransferAmount}
-                      onTransferComplete={handleTransferComplete}
                     />
                   )}
                 </>
@@ -250,8 +231,10 @@ const MintOperationContainer: React.FC = () => {
               gasMultiplier={gasMultiplier}
               onMintSuccess={handleMintSuccess}
               onMintError={handleMintError}
+              // Only disable if there's no approval but a token is selected and using prepay
+              disabled={!!(paymentType === 'PREPAY' && selectedToken && !approvalComplete)}
             />
-
+            
             {/* Transaction Result Section */}
             {latestTxHash && (
               <div className="transaction-result">
@@ -279,10 +262,10 @@ const MintOperationContainer: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            {/* NFT Gallery */}
+            <NFTGallery latestTxHash={latestTxHash} />
           </div>
-          
-          {/* NFT Gallery */}
-          <NFTGallery latestTxHash={latestTxHash} />
         </>
       )}
     </div>
