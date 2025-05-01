@@ -16,6 +16,12 @@ A demonstration of NERO Chain's Account Abstraction capabilities, allowing users
 - Pay gas fees with ERC20 tokens
 - Mint NFTs through UserOperations
 
+### 2. NERO Wallet Example With Functionalities
+A demo of how to use the Nero Wallet in your application. Three features in this example
+- Mint NFT
+- Create a ERC20 Token (pump fun like)
+- Retrieve NFTs from user (NFT Gallery)
+
 ### 2. Future Applications
 
 Additional applications will be added to showcase:
